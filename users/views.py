@@ -1,22 +1,23 @@
-import base64
 
 from django.views.decorators.http import require_http_methods
 from django.http import (
-    HttpRequest, HttpResponse, HttpResponseNotAllowed,
-    HttpResponseForbidden, HttpResponseNotFound,
-    JsonResponse
+    HttpRequest, HttpResponse,
+    HttpResponseForbidden, JsonResponse
 )
 
-from django.contrib.auth.models import User
 from django.contrib.auth import login, authenticate, logout
-from django.contrib.auth.forms import UserCreationForm
 
 from .models import Profile
-from .forms import ProfileForm
 from .serializers import ProfileSerializer
-# Create your views here.
+from .utils import (
+    verify_login_request, get_basic_auth_creds,
+    create_profile_from_user, verify_register_request,
+    create_user
+)
+from .exceptions import UsersValidationException
 
 
+@require_http_methods(["GET"])
 def get_profiles(request: HttpRequest):
     profiles = Profile.objects.all()
     serializer = ProfileSerializer(profiles, many=True)
@@ -25,28 +26,19 @@ def get_profiles(request: HttpRequest):
 
 @require_http_methods(["POST"])
 def login_user(request: HttpRequest):
-    if request.user.is_authenticated:
-        return HttpResponse('Already logged in')
-
-    if 'HTTP_AUTHORIZATION' not in request.META:
-        return HttpResponse('No auth header', status=401)
-
-    uname, passwd = _extract_uname_passwd_from_auth(
-        request.META['HTTP_AUTHORIZATION']
-    )
-
     try:
-        user = User.objects.get(username=uname)
-    except:
-        return HttpResponseNotFound('User not found')
+        verify_login_request()
+    except UsersValidationException as e:
+        return e
 
+    uname, passwd = get_basic_auth_creds(request)
     user = authenticate(request, username=uname, password=passwd)
 
     if user:
         login(request, user)
         return HttpResponse('Login success')
 
-    return HttpResponseForbidden('Invalid pass')
+    return HttpResponseForbidden('Invalid username/password')
 
 
 @require_http_methods(["POST"])
@@ -59,45 +51,13 @@ def logout_user(request: HttpRequest):
 
 @require_http_methods(["POST"])
 def register(request: HttpRequest):
-    if 'HTTP_AUTHORIZATION' not in request.META:
-        return HttpResponse('No auth header', status=401)
+    try:
+        verify_register_request(request)
+    except UsersValidationException as e:
+        return e
 
-    uname, passwd = _extract_uname_passwd_from_auth(
-        request.META['HTTP_AUTHORIZATION'])
-
-    if User.objects.filter(username=uname):
-        return HttpResponse('User already exists')
-
-    userForm = _create_user_form(uname, passwd)
-    if not userForm.is_valid():
-        return HttpResponse('Invalid user form')
-
-    userForm.save()
-    # login(request, uname)
-    user = authenticate(request, username=uname, password=passwd)
-    _save_profile(user)
+    uname, passwd = get_basic_auth_creds(request)
+    user = create_user(uname, passwd)
+    create_profile_from_user(user)
+    login(request, user)
     return HttpResponse()
-
-
-def _extract_uname_passwd_from_auth(auth):
-    auth = auth.split()
-    uname, passwd = base64.b64decode(auth[1].encode()).decode().split(':')
-    return (uname, passwd)
-
-
-def _create_user_form(uname, passwd) -> UserCreationForm:
-    userForm = UserCreationForm(
-        {
-            'username': uname,
-            'password1': passwd,
-            'password2': passwd,
-        }
-    )
-
-    return userForm
-
-
-def _save_profile(user):
-    form = ProfileForm(user).save(commit=False)
-    form.user = user
-    form.save()
