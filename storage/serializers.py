@@ -5,14 +5,12 @@ from .models import File, Tag, Review
 
 class FileSerializer(serializers.ModelSerializer):
     title = serializers.SerializerMethodField()
+    owner = serializers.CharField()
 
     class Meta:
         model = File
         fields = ['title', 'description', 'size',
                   'owner', 'vote_total', 'ratio']
-
-    def get_title(self, obj):
-        return str(obj)
 
 
 class TagSerializer(serializers.ModelSerializer):
