@@ -18,7 +18,7 @@ class File(models.Model):
     tags = models.ManyToManyField('Tag', blank=True)
     vote_total = models.IntegerField(default=0, null=True, blank=True)
     ratio = models.FloatField(default=0, blank=False, null=False)
-    owner = models.OneToOneField(
+    owner = models.ForeignKey(
         User, on_delete=models.CASCADE, blank=True, null=True)
     access_key = models.TextField(
         blank=True, null=True
