@@ -38,13 +38,6 @@ def get_files(request: HttpRequest):
     return Response(serializer.data)
 
 
-# @api_view(['GET'])
-# def get_file(request: HttpRequest, pk):
-#     files = File.objects.all()
-#     serializer = FileSerializer(files, many=True)
-#     return Response(serializer.data)
-
-
 @api_view(['DELETE'])
 def delete_file(request: HttpRequest, pk):
     file = File.objects.get(id=pk)
