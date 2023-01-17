@@ -6,6 +6,10 @@ from django.http import (
     StreamingHttpResponse
 )
 
+from .utils import (
+    is_access_allowed, get_access_key_from_cookies,
+    is_upload_file_request_valid
+)
 from .models import File
 from .forms import FileForm
 from . import minio
@@ -13,20 +17,21 @@ from . import minio
 
 @require_http_methods(["POST"])
 def upload_file(request: HttpRequest):
-    if not request.FILES:
-        return HttpResponseBadRequest()
-
-    private = True if request.user.is_authenticated else False
+    is_upload_file_request_valid(request)
 
     file = File()
-    fileForm = FileForm(request.POST, private)
+    fileForm = FileForm(request.POST)
 
     try:
         size = minio.save(file.id, request.FILES['file'])
-        file = fileForm.save(commit=False)
+        file: File = fileForm.save(commit=False)
         file.size = size
-        if private:
+        if request.user.is_authenticated:
             file.owner = request.user
+        access_key = get_access_key_from_cookies(request)
+        if access_key:
+            file.access_key = access_key
+
         fileForm.is_valid() and fileForm.save()
     except:
         return HttpResponseServerError()
@@ -41,7 +46,7 @@ def download_file(request: HttpRequest, pk: str):
     except:
         return HttpResponseNotFound()
 
-    if not _is_access_allowed(request.user, file):
+    if not is_access_allowed(request, file):
         return HttpResponseForbidden()
 
     stream = minio.get_file_stream(pk)
@@ -55,16 +60,9 @@ def delete_file(request: HttpRequest, pk: str):
     except:
         return HttpResponseNotFound()
 
-    if not _is_access_allowed(request.user, file):
+    if not is_access_allowed(request, file):
         return HttpResponseForbidden()
 
     minio.delete(pk)
     file.delete()
     return HttpResponse()
-
-
-def _is_access_allowed(user, file):
-    if file.owner:
-        if user == file.owner:
-            return True
-    return False

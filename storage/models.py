@@ -20,13 +20,12 @@ class File(models.Model):
     ratio = models.FloatField(default=0, blank=False, null=False)
     owner = models.OneToOneField(
         User, on_delete=models.CASCADE, blank=True, null=True)
-    private = models.BooleanField(default=True, editable=True)
+    access_key = models.TextField(
+        blank=True, null=True
+    )
 
     def __str__(self):
         return f'{self.title}/{self.id}'
-
-    def ready(self):
-        from . import signals
 
 
 class Review(models.Model):
