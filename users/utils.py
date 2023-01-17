@@ -1,43 +1,44 @@
 import base64
 
-from django.http import (
-    HttpRequest, HttpResponse
-)
+from django.http import HttpRequest
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 
 from .forms import ProfileForm
-from .exceptions import UsersValidationException
+from .models import Profile
+from django.core.exceptions import BadRequest
 
 
 def verify_login_request(request: HttpRequest):
     """
     Raises:
-        UsersValidationException: Contains HttpResponse with error message.
+        BadRequest: Contains HttpResponse with error message.
     """
-    if request.user.is_authenticated:
-        raise UsersValidationException(
-            HttpResponse('Already logged in')
-        )
+    if is_authenticated(request):
+        raise BadRequest('Already logged in')
 
     if not has_basic_auth(request):
-        raise UsersValidationException(
-            HttpResponse('No auth header', status=401)
-        )
+        raise BadRequest('No auth header')
 
+
+def is_authenticated(request: HttpRequest):
+    return True if request.user.is_authenticated else False
+
+
+def verify_logout_request(request: HttpRequest):
+    if is_authenticated(request):
+        raise BadRequest('Already logged in')
 
 def verify_register_request(request: HttpRequest):
     """
     Raises:
-        UsersValidationException: Contains HttpResponse with error message.
+        BadRequest: Contains HttpResponse with error message.
     """
     verify_login_request(request)  # omg
 
     uname, _ = get_basic_auth_creds(request)
     if User.objects.filter(username=uname):
-        raise UsersValidationException(
-            HttpResponse('User already exists')
-        )
+        raise BadRequest('Username already registered')
 
 
 def has_basic_auth(request: HttpRequest):
@@ -58,9 +59,7 @@ def get_basic_auth_creds(request: HttpRequest):
 def create_user(uname: str, passwd: str) -> User:
     userForm = create_user_form(uname, passwd)
     if not userForm.is_valid():
-        raise UsersValidationException(
-            HttpResponse('Invalid user form')
-        )
+        raise BadRequest('Invalid user form')
     return userForm.save()
 
 
@@ -75,6 +74,6 @@ def create_user_form(uname, passwd) -> UserCreationForm:
 
 
 def create_profile_from_user(user: User):
-    form = ProfileForm(user).save(commit=False)
+    form: Profile = ProfileForm(user).save(commit=False)
     form.user = user
     form.save()

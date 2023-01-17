@@ -10,13 +10,14 @@ from django.contrib.auth import login, authenticate, logout
 from .models import Profile
 from .serializers import ProfileSerializer
 from .utils import (
-    verify_login_request, get_basic_auth_creds,
-    create_profile_from_user, verify_register_request,
-    create_user
+    verify_login_request, verify_register_request,
+    verify_logout_request, get_basic_auth_creds,
+    create_profile_from_user, create_user
 )
-from .exceptions import UsersValidationException
+from crudfilestorage.badrequest_handler import badrequest_to_http_response
 
 
+@badrequest_to_http_response
 @require_http_methods(["GET"])
 def get_profiles(request: HttpRequest):
     profiles = Profile.objects.all()
@@ -24,12 +25,10 @@ def get_profiles(request: HttpRequest):
     return JsonResponse(serializer.data, safe=False)
 
 
+@badrequest_to_http_response
 @require_http_methods(["POST"])
 def login_user(request: HttpRequest):
-    try:
-        verify_login_request()
-    except UsersValidationException as e:
-        return e
+    verify_login_request(request)
 
     uname, passwd = get_basic_auth_creds(request)
     user = authenticate(request, username=uname, password=passwd)
@@ -41,23 +40,21 @@ def login_user(request: HttpRequest):
     return HttpResponseForbidden('Invalid username/password')
 
 
+@badrequest_to_http_response
 @require_http_methods(["POST"])
 def logout_user(request: HttpRequest):
-    if not request.user.is_authenticated:
-        return HttpResponse('User not logged in')
+    verify_logout_request(request)
     logout(request)
     return HttpResponse('Logged out')
 
 
+@badrequest_to_http_response
 @require_http_methods(["POST"])
 def register(request: HttpRequest):
-    try:
-        verify_register_request(request)
-    except UsersValidationException as e:
-        return e
+    verify_register_request(request)
 
     uname, passwd = get_basic_auth_creds(request)
     user = create_user(uname, passwd)
     create_profile_from_user(user)
     login(request, user)
-    return HttpResponse()
+    return HttpResponse('Registered successfuly')
