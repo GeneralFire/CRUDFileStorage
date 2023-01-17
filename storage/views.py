@@ -1,4 +1,4 @@
-
+from django.views.decorators.http import require_http_methods
 from django.http import (
     HttpRequest, HttpResponse, HttpResponseNotAllowed,
     HttpResponseForbidden, HttpResponseNotFound,
@@ -11,10 +11,8 @@ from .forms import FileForm
 from . import minio
 
 
+@require_http_methods(["POST"])
 def upload_file(request: HttpRequest):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
-
     if not request.FILES:
         return HttpResponseBadRequest()
 
@@ -35,17 +33,37 @@ def upload_file(request: HttpRequest):
     return HttpResponse()
 
 
+@require_http_methods(["GET"])
 def download_file(request: HttpRequest, pk: str):
-    if request.method != 'GET':
-        return HttpResponseNotAllowed(['GET'])
     try:
         file = File.objects.get(id=pk)
     except:
         return HttpResponseNotFound()
 
-    if file.owner:
-        if request.user != file.owner:
-            return HttpResponseForbidden()
+    if not _is_access_allowed(request.user, file):
+        return HttpResponseForbidden()
 
     stream = minio.get_file_stream(pk)
     return StreamingHttpResponse(stream)
+
+
+@require_http_methods(["DELETE"])
+def delete_file(request: HttpRequest, pk: str):
+    try:
+        file = File.objects.get(id=pk)
+    except:
+        return HttpResponseNotFound()
+
+    if not _is_access_allowed(request.user, file):
+        return HttpResponseForbidden()
+
+    minio.delete(pk)
+    file.delete()
+    return HttpResponse()
+
+
+def _is_access_allowed(user, file):
+    if file.owner:
+        if user == file.owner:
+            return True
+    return False

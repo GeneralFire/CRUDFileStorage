@@ -1,5 +1,6 @@
 import base64
 
+from django.views.decorators.http import require_http_methods
 from django.http import (
     HttpRequest, HttpResponse, HttpResponseNotAllowed,
     HttpResponseForbidden, HttpResponseNotFound,
@@ -22,12 +23,10 @@ def get_profiles(request: HttpRequest):
     return JsonResponse(serializer.data, safe=False)
 
 
+@require_http_methods(["POST"])
 def login_user(request: HttpRequest):
     if request.user.is_authenticated:
         return HttpResponse('Already logged in')
-
-    if request.method != 'POST':
-        return HttpResponseNotAllowed()
 
     if 'HTTP_AUTHORIZATION' not in request.META:
         return HttpResponse('No auth header', status=401)
@@ -50,6 +49,7 @@ def login_user(request: HttpRequest):
     return HttpResponseForbidden('Invalid pass')
 
 
+@require_http_methods(["POST"])
 def logout_user(request: HttpRequest):
     if not request.user.is_authenticated:
         return HttpResponse('User not logged in')
@@ -57,10 +57,8 @@ def logout_user(request: HttpRequest):
     return HttpResponse('Logged out')
 
 
+@require_http_methods(["POST"])
 def register(request: HttpRequest):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed()
-
     if 'HTTP_AUTHORIZATION' not in request.META:
         return HttpResponse('No auth header', status=401)
 
@@ -75,6 +73,7 @@ def register(request: HttpRequest):
         return HttpResponse('Invalid user form')
 
     userForm.save()
+    # login(request, uname)
     user = authenticate(request, username=uname, password=passwd)
     _save_profile(user)
     return HttpResponse()
