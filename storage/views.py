@@ -1,68 +1,58 @@
 from django.views.decorators.http import require_http_methods
 from django.http import (
-    HttpRequest, HttpResponse, HttpResponseNotAllowed,
-    HttpResponseForbidden, HttpResponseNotFound,
-    HttpResponseServerError, HttpResponseBadRequest,
+    HttpRequest, HttpResponse, HttpResponseForbidden,
+    HttpResponseNotFound, HttpResponseServerError,
     StreamingHttpResponse
 )
 
 from .utils import (
-    is_access_allowed, get_access_key_from_cookies,
-    is_upload_file_request_valid
+    verify_upload_request, verify_download_request,
+    verify_delete_request, get_formdata_enc_access_key_from_get_request
 )
 from .models import File
 from .forms import FileForm
+from crudfilestorage.badrequest_handler import badrequest_to_http_response
 from . import minio
 
 
+@badrequest_to_http_response
 @require_http_methods(["POST"])
 def upload_file(request: HttpRequest):
-    is_upload_file_request_valid(request)
+    verify_upload_request(request)
+
+    # TODO: generate id without Model?
+    fileForm = FileForm(request.POST)
+    if not fileForm.is_valid():
+        return HttpResponse('Invalid file form-data', status=400)
 
     file = File()
-    fileForm = FileForm(request.POST)
+    size = minio.save(file.id, request.FILES['file'])
+    if not size:
+        return HttpResponse('Invalid file size', status=400)
 
-    try:
-        size = minio.save(file.id, request.FILES['file'])
-        file: File = fileForm.save(commit=False)
-        file.size = size
-        if request.user.is_authenticated:
-            file.owner = request.user
-        access_key = get_access_key_from_cookies(request)
-        if access_key:
-            file.access_key = access_key
-
-        fileForm.is_valid() and fileForm.save()
-    except:
-        return HttpResponseServerError()
-
-    return HttpResponse(f'{file.id}')
+    file.size = size
+    if request.user.is_authenticated:
+        file.owner = request.user
+    file.access_key = get_formdata_enc_access_key_from_get_request(request)
+    file.save()
+    return HttpResponse(f'File upload done. File id is {file.id}')
 
 
+@badrequest_to_http_response
 @require_http_methods(["GET"])
 def download_file(request: HttpRequest, pk: str):
-    try:
-        file = File.objects.get(id=pk)
-    except:
-        return HttpResponseNotFound()
-
-    if not is_access_allowed(request, file):
-        return HttpResponseForbidden()
-
+    verify_download_request(request, pk)
     stream = minio.get_file_stream(pk)
     return StreamingHttpResponse(stream)
 
 
+@badrequest_to_http_response
 @require_http_methods(["DELETE"])
 def delete_file(request: HttpRequest, pk: str):
-    try:
-        file = File.objects.get(id=pk)
-    except:
-        return HttpResponseNotFound()
+    verify_delete_request(request, pk)
 
-    if not is_access_allowed(request, file):
-        return HttpResponseForbidden()
-
-    minio.delete(pk)
+    file = File.objects.get(id=pk)
     file.delete()
-    return HttpResponse()
+    minio.delete(pk)
+
+    return HttpResponse('File deleted')
