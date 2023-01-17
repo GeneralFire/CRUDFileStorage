@@ -16,7 +16,7 @@ def upload_file(request: HttpRequest):
     if not request.FILES:
         return HttpResponseBadRequest()
 
-    private = False if request.user.is_authenticated else True
+    private = True if request.user.is_authenticated else False
 
     file = File()
     fileForm = FileForm(request.POST, private)
@@ -25,12 +25,13 @@ def upload_file(request: HttpRequest):
         size = minio.save(file.id, request.FILES['file'])
         file = fileForm.save(commit=False)
         file.size = size
-        file.owner = request.user
+        if private:
+            file.owner = request.user
         fileForm.is_valid() and fileForm.save()
     except:
         return HttpResponseServerError()
 
-    return HttpResponse()
+    return HttpResponse(f'{file.id}')
 
 
 @require_http_methods(["GET"])
