@@ -33,6 +33,7 @@ def upload_file(request: HttpRequest):
     file.size = size
     if request.user.is_authenticated:
         file.owner = request.user
+        request.user.profile.increment_uploaded_files_count()
     file.access_key = get_formdata_enc_access_key_from_get_request(request)
     file.save()
     return HttpResponse(f'File upload done. File id is {file.id}')

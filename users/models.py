@@ -16,3 +16,7 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.user.username
+
+    def increment_uploaded_files_count(self):
+        self.file_uploaded += 1
+        self.save()
