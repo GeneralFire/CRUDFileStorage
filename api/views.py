@@ -1,16 +1,21 @@
+import base64
+
 from django.contrib.auth import login, logout
 from django.http import HttpRequest
+from django.core.exceptions import BadRequest
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 
 from storage.serializers import FileSerializer
 from storage.models import File
-from storage.utils import is_access_allowed
+from storage.views import upload_file, delete_file, download_file
+from storage.minio_adapter import minio_adapter
 
 from users.serializers import ProfileSerializer
 from users.models import Profile
+from users.utils import create_user, get_basic_auth_creds, has_basic_auth
 
 # https://webdevblog.ru/sozdanie-django-api-ispolzuya-django-rest-framework-apiview/
 
@@ -22,7 +27,20 @@ class StorageApiView(APIView):
         return Response(serializer.data)
 
     def delete(self, request: HttpRequest, *args, **kwargs):
-        pk = get_pk_from_kwargs(kwargs)
+        try:
+            pk = get_pk_from_kwargs(kwargs)
+            delete_file(request, pk)
+            return Response()
+        except BadRequest as e:
+            return
+
+    def link(self, request: HttpRequest, *args, **kwargs):
+        pk = kwargs.get('pk', '')
+        if not pk:
+            return response_with_reason(
+                f"Ivalid file id '{pk}'"
+            )
+
         try:
             file = File.objects.get(id=pk)
         except File.DoesNotExist:
@@ -31,16 +49,21 @@ class StorageApiView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        file.delete()
-        return Response()
+        if not is_access_allowed(request, file):
+            return response_with_reason(
+                'You not allowed to download this file',
+                status=status.HTTP_403_FORBIDDEN)
 
-    def link(self, request: HttpRequest, *args, **kwargs):
-        pk = self.kwargs.get('pk', '')
-        if pk:
-            pass
+        return Response(minio_adapter.get_file(pk))
 
     def post(self, request: HttpRequest, *args, **kwargs):
-        pass
+        try:
+            upload_file(request)
+        except BadRequest as e:
+            return response_with_reason(
+                f'{e}',
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class ProfilesApiView(APIView):
@@ -52,27 +75,43 @@ class ProfilesApiView(APIView):
 
 class AuthApiView(APIView):
     def post(self, request: HttpRequest):
-        auth = self.get_authenticate_header()
-        pass
+        if request.user.is_authenticated:
+            return response_with_reason(
+                'Already authenticated',
+                status=status.HTTP_208_ALREADY_REPORTED
+            )
 
     def delete(self, request: HttpRequest):
         if request.user.is_authenticated:
             logout(request)
-            return Response('Ok')
-        return Response('Already logged out')
+            return Response()
+        return response_with_reason(
+            'Already logged out',
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
 
 def get_pk_from_kwargs(kwargs: dict):
     return kwargs.get('pk', '')
 
 
-def get_access_key_from_kwargs(kwargs: dict):
-    return kwargs.get('pk', '')
-
-
 @api_view(['POST'])
 def register(request: HttpRequest):
-    pass
+    if not has_basic_auth(request):
+        return Response(
+            'Invalid basic auth field',
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    uname, passwd = get_basic_auth_creds(request)
+    try:
+        create_user(uname, passwd)
+        return Response()
+    except Exception as e:
+        return response_with_reason(
+            f'{e}',
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
 
 @api_view(['GET'])
 def get_api_routines(request: HttpRequest):

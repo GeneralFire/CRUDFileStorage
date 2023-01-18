@@ -1,6 +1,5 @@
 from .models import File
 
-from django.db.models.fields import UUIDField
 from django.http import HttpRequest
 from django.core.exceptions import BadRequest
 from django.contrib.auth.hashers import check_password, make_password
