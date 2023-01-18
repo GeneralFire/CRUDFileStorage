@@ -44,7 +44,7 @@ def is_access_allowed(request: HttpRequest, file: File):
 def verify_upload_request(request: HttpRequest):
     """
     Raises:
-        HttpResponseBadRequest: in case request without files,
+        BadRequest: in case request without files,
             or request doesn't contains access key and sent by not
             authorized user.
     """
