@@ -12,7 +12,7 @@ class MinioAnonAdapter:
     DEFAULT_BACKET_NAME = 'main'
 
     def __init__(self):
-        url = os.getenv('MINIO_URL')
+        url = os.getenv('MINIO_URL', 'localhost:9000')
 
         if not url:
             raise minio.S3Error('Cannot resolve MinIO url')
@@ -28,16 +28,16 @@ class MinioAnonAdapter:
             id
         )
 
-    def save(self, id: str, fileStream: io.BytesIO) -> str:
+    def save(self, id: str, file_stream: io.BytesIO) -> str:
         """Return error message if error.
         """
         try:
             self._minio.put_object(
                 MinioAnonAdapter.DEFAULT_BACKET_NAME,
                 id,
-                fileStream,
-                fileStream.size,
-                content_type=fileStream.content_type
+                file_stream,
+                file_stream.size,
+                content_type=file_stream.content_type
             )
             return ''
         except Exception as e:
