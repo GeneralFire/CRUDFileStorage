@@ -1,7 +1,7 @@
-import io
 import uuid
 
 from django.db import models
+from django.core.files.uploadedfile import UploadedFile
 
 from users.models import User
 from .minio_adapter import minio_adapter
@@ -32,7 +32,8 @@ class File(models.Model):
         self.download_count += 1
         self.save()
 
-    def save(self, title: str, file_stream: io.BytesIO, *args, **kwargs):
-        minio_adapter.save(str(self.id), file_stream=file_stream)
+    def save(self, title: str, file: UploadedFile, *args, **kwargs):
+        minio_adapter.save(str(self.id), file=file)
         self.title = title
+        self.size = file.size
         super(File, self).save(*args, **kwargs)

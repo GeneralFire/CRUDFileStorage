@@ -2,7 +2,8 @@ import os
 import io
 
 import minio
-from django.core.files import File
+from django.core.files.base import File
+from django.core.files.uploadedfile import UploadedFile
 
 __all__ = ['minio_adapter']
 
@@ -28,20 +29,14 @@ class MinioAnonAdapter:
             id
         )
 
-    def save(self, id: str, file_stream: io.BytesIO) -> str:
-        """Return error message if error.
-        """
-        try:
-            self._minio.put_object(
-                MinioAnonAdapter.DEFAULT_BACKET_NAME,
-                id,
-                file_stream,
-                file_stream.size,
-                content_type=file_stream.content_type
-            )
-            return ''
-        except Exception as e:
-            return str(e)
+    def save(self, id: str, file: UploadedFile) -> str:
+        self._minio.put_object(
+            MinioAnonAdapter.DEFAULT_BACKET_NAME,
+            id,
+            file,
+            file.size,
+            content_type=file.content_type
+        )
 
     def get_file(self, id: str) -> File:
         try:
@@ -54,7 +49,6 @@ class MinioAnonAdapter:
             resp.close()
             resp.release_conn()
         return file
-
 
 
 minio_adapter = MinioAnonAdapter()
