@@ -1,5 +1,4 @@
 from django.contrib.auth.hashers import check_password, make_password
-from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
@@ -44,7 +43,7 @@ class StorageViewSet(viewsets.ViewSet):
         return Response(file.get_stream())
 
     def upload(self, request: HttpRequest, *args, **kwargs):
-        if not self._met_access_capability:
+        if not self._met_access_capability(request):
             return response_with_reason(
                 'Use access_key form-data or authorize to upload file',
                 status.HTTP_401_UNAUTHORIZED
@@ -61,20 +60,21 @@ class StorageViewSet(viewsets.ViewSet):
 
         try:
             file.save(
-                title=request.FILES[StorageViewSet.FILE_KEY].name,
-                file_stream=request.FILES[StorageViewSet.FILE_KEY]
+                file=request.FILES[StorageViewSet.FILE_KEY]
             )
         except ValidationError as e:
             return response_with_reason(
                 f'Unable to validate file: {e}',
                 status.HTTP_400_BAD_REQUEST
             )
-        return Response()
+        return Response(
+            {'File id': str(file.id)}
+        )
 
     def _met_access_capability(self, request: HttpRequest):
         if request.user.is_authenticated:
             return True
-        return request.COOKIES.get(StorageViewSet.FILE_ACCESS_KEY, '')
+        return request.POST.get(StorageViewSet.FILE_ACCESS_KEY, '')
 
     def _is_upload_request_valid(self, request: HttpRequest):
         if not request.FILES:
@@ -127,47 +127,18 @@ class ProfilesViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
 
-class UserViewSet(viewsets.ViewSet):
-    def login(self, request: HttpRequest):
-        """Form-data request based authentication."""
-        if request.user.is_authenticated:
-            return response_with_reason(
-                'Already logged in',
-                status=status.HTTP_208_ALREADY_REPORTED
-            )
+@api_view(['POST'])
+def register(request: HttpRequest):
+    """Form-data request based registraton."""
+    userForm = UserCreationForm(request.POST)
+    if not userForm.is_valid():
+        return Response(
+            userForm.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-        uname = request.POST['username']
-        passwd = request.POST['password']
-        user = authenticate(request, username=uname, password=passwd)
-        if user is None:
-            return response_with_reason(
-                'username/password mismatch',
-                status.HTTP_401_UNAUTHORIZED
-            )
-        login(request, user)
-        return Response()
-
-    def logout(self, request: HttpRequest):
-        if not request.user.is_authenticated:
-            return response_with_reason(
-                'Already logged out',
-                status=status.HTTP_208_ALREADY_REPORTED
-            )
-        logout(request)
-        return Response()
-
-    def register(self, request: HttpRequest):
-        """Form-data request based registraton."""
-        userForm = UserCreationForm(request.POST)
-        if not userForm.is_valid():
-            return Response(
-                userForm.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user = userForm.save()
-        login(request, user)
-        return Response()
+    userForm.save()
+    return Response()
 
 
 @api_view(['GET'])
@@ -184,9 +155,8 @@ def get_api_routines(request: HttpRequest):
         '/profiles': {
             'GET': 'List profiles'
         },
-        '/auth': {
-            'POST': 'Login using basic auth',
-            'DELETE': 'Logout'
+        '/token': {
+            'POST': 'Get token',
         },
         '/register': {
             'Register using base auth'
