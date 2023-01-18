@@ -10,7 +10,7 @@ from .utils import (
 from .models import File
 from .forms import FileForm
 from crudfilestorage.badrequest_handler import badrequest_to_http_response
-from . import minio
+from .minio_adapter import minio_adapter
 
 
 @badrequest_to_http_response
@@ -22,12 +22,21 @@ def upload_file(request: HttpRequest):
     if not fileForm.is_valid():
         return HttpResponse('Invalid file form-data', status=400)
 
-    file = fileForm.save(commit=False)
-    size = minio.save(file.id, request.FILES['file'])
-    if not size:
-        return HttpResponse('Invalid file size', status=400)
+    file: File = fileForm.save(commit=False)
 
-    file.size = size
+    file_to_upload = request.FILES['file']
+    if not file_to_upload.size:
+        return HttpResponse(
+            'Empty file upload attempt', status=400
+        )
+    err_msg = minio_adapter.save(str(file.id), request.FILES['file'])
+    if err_msg:
+        return HttpResponse(
+            f'Error occur while uploading: {err_msg}', status=400
+        )
+
+    file.title = file_to_upload.name
+    file.size = file_to_upload.size
     if request.user.is_authenticated:
         file.owner = request.user
         request.user.profile.increment_uploaded_files_count()
@@ -40,8 +49,8 @@ def upload_file(request: HttpRequest):
 @require_http_methods(["GET"])
 def download_file(request: HttpRequest, pk: str):
     verify_download_request(request, pk)
-    stream = minio.get_file_stream(pk)
-    return StreamingHttpResponse(stream)
+    file_response = minio_adapter.get_file_response(pk)
+    return StreamingHttpResponse(file_response)
 
 
 @badrequest_to_http_response
@@ -51,6 +60,6 @@ def delete_file(request: HttpRequest, pk: str):
 
     file = File.objects.get(id=pk)
     file.delete()
-    minio.delete(pk)
+    minio_adapter.delete(pk)
 
     return HttpResponse('File deleted')
