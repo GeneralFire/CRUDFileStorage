@@ -15,6 +15,7 @@ def get_formdata_enc_access_key_from_get_request(request: HttpRequest):
         return make_password(request_data[ACCESS_KEY])
     return ''
 
+
 def get_access_key_from_cookies(request: HttpRequest):
     request_meta = request.COOKIES
     if ACCESS_KEY in request_meta:
@@ -35,7 +36,7 @@ def is_access_allowed(request: HttpRequest, file: File):
     request_access_key = get_access_key_from_cookies(request)
     if check_password(request_access_key,
                       file.access_key
-    ):
+                      ):
         return True
 
     return False
@@ -77,8 +78,3 @@ def verify_download_request(request: HttpRequest, pk: str):
 
 def verify_delete_request(request: HttpRequest, pk: str):
     verify_download_request(request, pk)    # TODO: not intuitive
-
-
-def create_file_minimal_form(request: HttpRequest):
-    file = File()
-    return FileForm(request.POST)
