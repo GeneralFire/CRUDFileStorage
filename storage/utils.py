@@ -34,9 +34,10 @@ def is_access_allowed(request: HttpRequest, file: File):
         return False
 
     request_access_key = get_access_key_from_cookies(request)
-    if check_password(request_access_key,
-                      file.access_key
-                      ):
+    if check_password(
+        request_access_key,
+        file.access_key
+    ):
         return True
 
     return False
