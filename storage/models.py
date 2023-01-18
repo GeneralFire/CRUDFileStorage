@@ -32,8 +32,8 @@ class File(models.Model):
         self.download_count += 1
         self.save()
 
-    def save(self, title: str, file: UploadedFile, *args, **kwargs):
+    def save(self, file: UploadedFile, *args, **kwargs):
         minio_adapter.save(str(self.id), file=file)
-        self.title = title
+        self.title = file.name
         self.size = file.size
         super(File, self).save(*args, **kwargs)
