@@ -60,6 +60,5 @@ def delete_file(request: HttpRequest, pk: str):
 
     file = File.objects.get(id=pk)
     file.delete()
-    minio_adapter.delete(pk)
 
     return HttpResponse('File deleted')
