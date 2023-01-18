@@ -1,23 +1,21 @@
+import io
 import uuid
 
 from django.db import models
 
-
 from users.models import User
+from .minio_adapter import minio_adapter
 # Create your models here.
 
 
 class File(models.Model):
-    title = models.CharField(max_length=256, blank=True, null=True)
+    title = models.CharField(max_length=256, blank=False, null=False)
     description = models.TextField(null=True, blank=True)
     size = models.IntegerField(default=0, blank=False, null=False)
     id = models.UUIDField(default=uuid.uuid4, unique=True,
                           editable=False, primary_key=True)
     created = models.DateTimeField(auto_now_add=True)
-    access_count = models.IntegerField(default=0, editable=True)
-    tags = models.ManyToManyField('Tag', blank=True)
-    vote_total = models.IntegerField(default=0, null=True, blank=True)
-    ratio = models.FloatField(default=0, blank=False, null=False)
+    download_count = models.IntegerField(default=0, editable=True)
     owner = models.ForeignKey(
         User, on_delete=models.CASCADE, blank=True, null=True)
     access_key = models.TextField(
@@ -27,28 +25,14 @@ class File(models.Model):
     def __str__(self):
         return f'{self.title}/{self.id}'
 
+    def get_stream(self):
+        return minio_adapter.get_file(str(self.id))
 
-class Review(models.Model):
-    VOTE_TYPE = (
-        ('up', 'Up Vote'),
-        ('down', 'Down Vote')
-    )
-    file = models.ForeignKey(File, on_delete=models.CASCADE)
-    body = models.TextField(null=True, blank=True)
-    value = models.CharField(max_length=256, choices=VOTE_TYPE)
-    created = models.DateTimeField(auto_now_add=True)
-    id = models.UUIDField(default=uuid.uuid4, unique=True,
-                          editable=False, primary_key=True)
+    def increment_download_count(self):
+        self.download_count += 1
+        self.save()
 
-    def __str__(self):
-        return self.value
-
-
-class Tag(models.Model):
-    name = models.CharField(max_length=200)
-    created = models.DateTimeField(auto_now_add=True)
-    id = models.UUIDField(default=uuid.uuid4, unique=True,
-                          editable=False, primary_key=True)
-
-    def __str__(self):
-        return self.name
+    def save(self, title: str, file_stream: io.BytesIO, *args, **kwargs):
+        minio_adapter.save(str(self.id), file_stream=file_stream)
+        self.title = title
+        super(File, self).save(*args, **kwargs)

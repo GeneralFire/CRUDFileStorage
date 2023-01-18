@@ -2,8 +2,6 @@ from django.contrib import admin
 
 # Register your models here.
 
-from .models import File, Review, Tag
+from .models import File
 
-admin.site.register(
-    [File, Review, Tag]
-)
+admin.site.register(File)

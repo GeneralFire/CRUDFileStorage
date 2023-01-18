@@ -1,116 +1,173 @@
-import base64
-
-from django.contrib.auth import login, logout
+from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth.forms import UserCreationForm
+from django.core.exceptions import ValidationError
+from django.shortcuts import get_object_or_404
 from django.http import HttpRequest
-from django.core.exceptions import BadRequest
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status, viewsets
-from rest_framework.views import APIView
+from rest_framework import viewsets
+from rest_framework import status
 
-from storage.serializers import FileSerializer
+from .serializers import FileSerializer
+from storage.forms import FileForm
 from storage.models import File
-from storage.views import upload_file, delete_file, download_file
-from storage.minio_adapter import minio_adapter
 
-from users.serializers import ProfileSerializer
+from .serializers import ProfileSerializer, FileSerializer
 from users.models import Profile
-from users.utils import create_user, get_basic_auth_creds, has_basic_auth
-
-# https://webdevblog.ru/sozdanie-django-api-ispolzuya-django-rest-framework-apiview/
 
 
-class StorageApiView(APIView):
-    def get(self, request: HttpRequest, *args, **kwargs):
+class StorageViewSet(viewsets.ViewSet):
+
+    FILE_ACCESS_KEY = 'access_key'
+    FILE_KEY = 'file'
+
+    def list(self, request: HttpRequest):
         files = File.objects.all()
         serializer = FileSerializer(files, many=True)
         return Response(serializer.data)
 
-    def delete(self, request: HttpRequest, *args, **kwargs):
-        try:
-            pk = get_pk_from_kwargs(kwargs)
-            delete_file(request, pk)
-            return Response()
-        except BadRequest as e:
-            return
+    def delete(self, request: HttpRequest, pk: str):
+        queryset = File.objects.all()
+        file = get_object_or_404(queryset, pk=pk)
+        if not self._is_allowed_to_access(request, file):
+            return self._return_forbidden(pk)
+        file.delete()
+        return Response()
 
-    def link(self, request: HttpRequest, *args, **kwargs):
-        pk = kwargs.get('pk', '')
-        if not pk:
+    def download(self, request: HttpRequest, pk):
+        queryset = File.objects.all()
+        file = get_object_or_404(queryset, pk=pk)
+        if not self._is_allowed_to_access(request, file):
+            return self._return_forbidden(pk)
+        return Response(file.get_stream())
+
+    def upload(self, request: HttpRequest, *args, **kwargs):
+        if not self._met_access_capability:
             return response_with_reason(
-                f"Ivalid file id '{pk}'"
+                'Use access_key form-data or authorize to upload file',
+                status.HTTP_401_UNAUTHORIZED
+            )
+        if not self._is_upload_request_valid(request):
+            return response_with_reason(
+                'File request invalid. Check file form-data',
+                status.HTTP_400_BAD_REQUEST
             )
 
+        fileForm = FileForm(request.POST)
+        file: File = fileForm.save(commit=False)
+        self._set_access_fields(request, file)
+
         try:
-            file = File.objects.get(id=pk)
-        except File.DoesNotExist:
-            return response_with_reason(
-                f'File with id {pk} not found',
-                status=status.HTTP_404_NOT_FOUND
+            file.save(
+                title=request.FILES[StorageViewSet.FILE_KEY].name,
+                file_stream=request.FILES[StorageViewSet.FILE_KEY]
             )
-
-        if not is_access_allowed(request, file):
+        except ValidationError as e:
             return response_with_reason(
-                'You not allowed to download this file',
-                status=status.HTTP_403_FORBIDDEN)
-
-        return Response(minio_adapter.get_file(pk))
-
-    def post(self, request: HttpRequest, *args, **kwargs):
-        try:
-            upload_file(request)
-        except BadRequest as e:
-            return response_with_reason(
-                f'{e}',
-                status=status.HTTP_400_BAD_REQUEST
+                f'Unable to validate file: {e}',
+                status.HTTP_400_BAD_REQUEST
             )
+        return Response()
+
+    def _met_access_capability(self, request: HttpRequest):
+        if request.user.is_authenticated:
+            return True
+        return request.COOKIES.get(StorageViewSet.FILE_ACCESS_KEY, '')
+
+    def _is_upload_request_valid(self, request: HttpRequest):
+        if not request.FILES:
+            return False
+        if StorageViewSet.FILE_KEY not in request.FILES:
+            return False
+        if not request.FILES[StorageViewSet.FILE_KEY].size:
+            return False
+        return True
+
+    def _set_access_fields(self, request: HttpRequest, file: File):
+        if request.user.is_authenticated:
+            file.owner = request.user
+        file.access_key = make_password(
+            request.FILES.get(StorageViewSet.FILE_ACCESS_KEY, '')
+        )
+
+    def _is_allowed_to_access(self, request: HttpRequest, file: File):
+        if file.owner:
+            if not request.user.is_authenticated:
+                return False
+            if request.user == file.owner:
+                return True
+
+        if not file.access_key:
+            return False
+
+        request_access_key = request.META.get(
+            StorageViewSet.FILE_ACCESS_KEY, ''
+        )
+        if check_password(
+            request_access_key,
+            file.access_key
+        ):
+            return True
+
+        return False
+
+    def _return_forbidden(self, pk):
+        return response_with_reason(
+            f"You unable to access this '{pk}' file",
+            status=status.HTTP_403_FORBIDDEN
+        )
 
 
-class ProfilesApiView(APIView):
-    def get(self, request: HttpRequest):
+class ProfilesViewSet(viewsets.ViewSet):
+    def list(self, request: HttpRequest):
         profiles = Profile.objects.all()
         serializer = ProfileSerializer(profiles, many=True)
         return Response(serializer.data)
 
 
-class AuthApiView(APIView):
-    def post(self, request: HttpRequest):
+class UserViewSet(viewsets.ViewSet):
+    def login(self, request: HttpRequest):
+        """Form-data request based authentication."""
         if request.user.is_authenticated:
             return response_with_reason(
-                'Already authenticated',
+                'Already logged in',
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 
-    def delete(self, request: HttpRequest):
-        if request.user.is_authenticated:
-            logout(request)
-            return Response()
-        return response_with_reason(
-            'Already logged out',
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
-
-def get_pk_from_kwargs(kwargs: dict):
-    return kwargs.get('pk', '')
-
-
-@api_view(['POST'])
-def register(request: HttpRequest):
-    if not has_basic_auth(request):
-        return Response(
-            'Invalid basic auth field',
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    uname, passwd = get_basic_auth_creds(request)
-    try:
-        create_user(uname, passwd)
+        uname = request.POST['username']
+        passwd = request.POST['password']
+        user = authenticate(request, username=uname, password=passwd)
+        if user is None:
+            return response_with_reason(
+                'username/password mismatch',
+                status.HTTP_401_UNAUTHORIZED
+            )
+        login(request, user)
         return Response()
-    except Exception as e:
-        return response_with_reason(
-            f'{e}',
-            status=status.HTTP_400_BAD_REQUEST
-        )
+
+    def logout(self, request: HttpRequest):
+        if not request.user.is_authenticated:
+            return response_with_reason(
+                'Already logged out',
+                status=status.HTTP_208_ALREADY_REPORTED
+            )
+        logout(request)
+        return Response()
+
+    def register(self, request: HttpRequest):
+        """Form-data request based registraton."""
+        userForm = UserCreationForm(request.POST)
+        if not userForm.is_valid():
+            return Response(
+                userForm.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = userForm.save()
+        login(request, user)
+        return Response()
 
 
 @api_view(['GET'])
@@ -144,6 +201,8 @@ def get_api_routines(request: HttpRequest):
 
 def response_with_reason(reason: str, status: status):
     return Response(
-        {'Reson': reason},
+        {
+            'Reason': reason
+        },
         status=status
     )

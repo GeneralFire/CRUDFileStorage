@@ -6,8 +6,7 @@ from .models import File
 class FileForm(ModelForm):
     class Meta:
         model = File
-        fields = ['description',
-                  'tags', 'owner']
+        fields = ['description', 'owner']
 
     def __init__(self, *args, **kwargs):
         super(FileForm, self).__init__(*args, **kwargs)

@@ -6,4 +6,4 @@ class StorageConfig(AppConfig):
     name = 'storage'
 
     def ready(self) -> None:
-        from .signals import file_delete_signal
+        from . import signals
