@@ -26,8 +26,8 @@ def is_authenticated(request: HttpRequest):
 
 
 def verify_logout_request(request: HttpRequest):
-    if is_authenticated(request):
-        raise BadRequest('Already logged in')
+    if not is_authenticated(request):
+        raise BadRequest('Already logged out')
 
 def verify_register_request(request: HttpRequest):
     """
