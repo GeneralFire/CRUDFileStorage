@@ -49,8 +49,8 @@ def upload_file(request: HttpRequest):
 @require_http_methods(["GET"])
 def download_file(request: HttpRequest, pk: str):
     verify_download_request(request, pk)
-    file_response = minio_adapter.get_file_response(pk)
-    return StreamingHttpResponse(file_response)
+    file = minio_adapter.get_file(pk)
+    return StreamingHttpResponse(file)
 
 
 @badrequest_to_http_response
