@@ -1,8 +1,6 @@
 from django.views.decorators.http import require_http_methods
 from django.http import (
-    HttpRequest, HttpResponse, HttpResponseForbidden,
-    HttpResponseNotFound, HttpResponseServerError,
-    StreamingHttpResponse
+    HttpRequest, HttpResponse, StreamingHttpResponse
 )
 
 from .utils import (
@@ -20,12 +18,11 @@ from . import minio
 def upload_file(request: HttpRequest):
     verify_upload_request(request)
 
-    # TODO: generate id without Model?
     fileForm = FileForm(request.POST)
     if not fileForm.is_valid():
         return HttpResponse('Invalid file form-data', status=400)
 
-    file = File()
+    file = fileForm.save(commit=False)
     size = minio.save(file.id, request.FILES['file'])
     if not size:
         return HttpResponse('Invalid file size', status=400)
