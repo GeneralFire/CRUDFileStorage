@@ -2,7 +2,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
-from django.http import HttpRequest
+from django.http import HttpRequest, FileResponse
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -27,7 +27,7 @@ class StorageViewSet(viewsets.ViewSet):
         serializer = FileSerializer(files, many=True)
         return Response(serializer.data)
 
-    def delete(self, request: HttpRequest, pk: str):
+    def destroy(self, request: HttpRequest, pk: str):
         queryset = File.objects.all()
         file = get_object_or_404(queryset, pk=pk)
         if not self._is_allowed_to_access(request, file):
@@ -35,14 +35,17 @@ class StorageViewSet(viewsets.ViewSet):
         file.delete()
         return Response()
 
-    def download(self, request: HttpRequest, pk):
+    def retrieve(self, request: HttpRequest, pk):
         queryset = File.objects.all()
         file = get_object_or_404(queryset, pk=pk)
         if not self._is_allowed_to_access(request, file):
             return self._return_forbidden(pk)
-        return Response(file.get_stream())
+        return FileResponse(
+            file.get_stream(),
+            filename=file.title,
+        )
 
-    def upload(self, request: HttpRequest, *args, **kwargs):
+    def create(self, request: HttpRequest, *args, **kwargs):
         if not self._met_access_capability(request):
             return response_with_reason(
                 'Use access_key form-data or authorize to upload file',
