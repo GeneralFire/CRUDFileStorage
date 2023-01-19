@@ -91,7 +91,7 @@ class StorageViewSet(viewsets.ViewSet):
 
     def _set_access_fields(self, request: HttpRequest, file: File):
         if request.user.is_authenticated:
-            file.owner = request.user
+            file.owner = request.user.profile
         file.access_key = make_password(
             request.POST.get(StorageViewSet.POST_FILE_ACCESS_KEY, '')
         )
@@ -100,7 +100,7 @@ class StorageViewSet(viewsets.ViewSet):
         if file.owner:
             if not request.user.is_authenticated:
                 return False
-            if request.user == file.owner:
+            if request.user.profile == file.owner:
                 return True
 
         if not file.access_key:

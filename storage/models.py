@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 from django.core.files.uploadedfile import UploadedFile
 
-from users.models import User
+from users.models import Profile
 from .minio_adapter import minio_adapter
 # Create your models here.
 
@@ -17,7 +17,7 @@ class File(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     download_count = models.IntegerField(default=0, editable=True)
     owner = models.ForeignKey(
-        User, on_delete=models.CASCADE, blank=True, null=True)
+        Profile, on_delete=models.CASCADE, blank=True, null=True)
     access_key = models.TextField(
         blank=True, null=True
     )
@@ -38,5 +38,6 @@ class File(models.Model):
             minio_adapter.save(str(self.id), file=file)
             self.title = file.name
             self.size = file.size
-
+        if self.owner:
+            self.owner.increment_uploaded_files_count()
         super(File, self).save(*args, **kwargs)
