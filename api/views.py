@@ -155,7 +155,7 @@ def get_api_routines(request: HttpRequest):
         },
         '/storage/*': {
             'DELETE': 'Delete file by id',
-            'LINK': 'Download file by id',
+            'GET': 'Download file by id',
         },
         '/profiles': {
             'GET': 'List profiles'
