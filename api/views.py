@@ -108,7 +108,7 @@ class StorageViewSet(viewsets.ViewSet):
         request_access_key = request.META.get(
             StorageViewSet.FILE_ACCESS_KEY, ''
         )
-        if check_password(
+        if request_access_key and check_password(
             request_access_key,
             file.access_key
         ):
