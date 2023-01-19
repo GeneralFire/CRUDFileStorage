@@ -8,9 +8,15 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "${cwd}/manage.py",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false,
+            "args": [
+                "runserver"
+            ],
+            "env": {
+                "MINIO_URL": "localhost:9000",
+            }
         }
     ]
 }
