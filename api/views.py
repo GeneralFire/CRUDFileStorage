@@ -19,7 +19,6 @@ from users.models import Profile
 
 class StorageViewSet(viewsets.ViewSet):
 
-    HEADER_FILE_ACCESS_KEY = 'HTTP_FILE_ACCESS_KEY'
     POST_FILE_ACCESS_KEY = 'FILE-ACCESS-KEY'
     FILE_KEY = 'file'
 
@@ -94,7 +93,7 @@ class StorageViewSet(viewsets.ViewSet):
         if request.user.is_authenticated:
             file.owner = request.user
         file.access_key = make_password(
-            request.FILES.get(StorageViewSet.HEADER_FILE_ACCESS_KEY, '')
+            request.POST.get(StorageViewSet.POST_FILE_ACCESS_KEY, '')
         )
 
     def _is_allowed_to_access(self, request: HttpRequest, file: File):
@@ -105,10 +104,10 @@ class StorageViewSet(viewsets.ViewSet):
                 return True
 
         if not file.access_key:
-            return False
+            assert False, f'File without owner and access key found!'
 
-        request_access_key = request.META.get(
-            StorageViewSet.HEADER_FILE_ACCESS_KEY, ''
+        request_access_key = request.POST.get(
+            StorageViewSet.POST_FILE_ACCESS_KEY, ''
         )
         if request_access_key and check_password(
             request_access_key,
