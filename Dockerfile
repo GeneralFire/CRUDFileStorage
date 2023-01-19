@@ -14,4 +14,5 @@ RUN apt install -y \
     net-tools \
     iproute2
 
-ENTRYPOINT ["python", "/app/manage.py", "runserver", "0.0.0.0:8000"]
+COPY migrate_and_runserver.sh /app/
+ENTRYPOINT ["bash", "/app/migrate_and_runserver.sh"]
