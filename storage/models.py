@@ -26,6 +26,7 @@ class File(models.Model):
         return f'{self.title}/{self.id}'
 
     def get_stream(self):
+        self.increment_download_count()
         return minio_adapter.get_file(str(self.id))
 
     def increment_download_count(self):
