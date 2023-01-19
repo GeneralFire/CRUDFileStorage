@@ -19,7 +19,8 @@ from users.models import Profile
 
 class StorageViewSet(viewsets.ViewSet):
 
-    FILE_ACCESS_KEY = 'access_key'
+    HEADER_FILE_ACCESS_KEY = 'HTTP_FILE_ACCESS_KEY'
+    POST_FILE_ACCESS_KEY = 'FILE-ACCESS-KEY'
     FILE_KEY = 'file'
 
     def list(self, request: HttpRequest):
@@ -48,7 +49,8 @@ class StorageViewSet(viewsets.ViewSet):
     def create(self, request: HttpRequest, *args, **kwargs):
         if not self._met_access_capability(request):
             return response_with_reason(
-                'Use access_key form-data or authorize to upload file',
+                f'Use {StorageViewSet.POST_FILE_ACCESS_KEY} '
+                'form-data or authorize to upload file',
                 status.HTTP_401_UNAUTHORIZED
             )
         if not self._is_upload_request_valid(request):
@@ -77,7 +79,7 @@ class StorageViewSet(viewsets.ViewSet):
     def _met_access_capability(self, request: HttpRequest):
         if request.user.is_authenticated:
             return True
-        return request.POST.get(StorageViewSet.FILE_ACCESS_KEY, '')
+        return request.POST.get(StorageViewSet.POST_FILE_ACCESS_KEY, '')
 
     def _is_upload_request_valid(self, request: HttpRequest):
         if not request.FILES:
@@ -92,7 +94,7 @@ class StorageViewSet(viewsets.ViewSet):
         if request.user.is_authenticated:
             file.owner = request.user
         file.access_key = make_password(
-            request.FILES.get(StorageViewSet.FILE_ACCESS_KEY, '')
+            request.FILES.get(StorageViewSet.HEADER_FILE_ACCESS_KEY, '')
         )
 
     def _is_allowed_to_access(self, request: HttpRequest, file: File):
@@ -106,7 +108,7 @@ class StorageViewSet(viewsets.ViewSet):
             return False
 
         request_access_key = request.META.get(
-            StorageViewSet.FILE_ACCESS_KEY, ''
+            StorageViewSet.HEADER_FILE_ACCESS_KEY, ''
         )
         if request_access_key and check_password(
             request_access_key,
