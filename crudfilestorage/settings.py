@@ -78,7 +78,6 @@ WSGI_APPLICATION = 'crudfilestorage.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
-print(getenv('POSTGRES_HOST'))
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
