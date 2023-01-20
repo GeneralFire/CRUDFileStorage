@@ -16,6 +16,9 @@
             ],
             "env": {
                 "MINIO_URL": "localhost:9000",
+                "POSTGRE_USER": "user",
+                "POSTGRE_PASSWORD": "12345678",
+                "POSTGRE_HOST": "localhost",
             }
         }
     ]
