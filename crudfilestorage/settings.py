@@ -83,9 +83,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'CRUDStorageDB',
-        'USER': getenv('POSTGRES_USER'),
-        'PASSWORD': getenv('POSTGRES_PASSWORD'),
-        'HOST': getenv('POSTGRES_HOST'),
+        'USER': getenv('POSTGRE_USER'),
+        'PASSWORD': getenv('POSTGRE_PASSWORD'),
+        'HOST': getenv('POSTGRE_HOST'),
         'POST': ''
     }
 }
